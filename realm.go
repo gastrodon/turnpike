@@ -308,6 +308,12 @@ func addAuthMethod(details map[string]interface{}, method string) map[string]int
 	return details
 }
 
+func NewTicketAuthenticator(ticket string) AuthFunc {
+	return func(hello, challenge map[string]interface{}) (string, map[string]interface{}, error) {
+		return ticket, nil, nil
+	}
+}
+
 // r := Realm{
 // 	Authenticators: map[string]turnpike.Authenticator{
 // 		"wampcra": turnpike.NewCRAAuthenticatorFactoryFactory(mySecret),
