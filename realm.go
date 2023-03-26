@@ -257,7 +257,7 @@ func (r Realm) authenticate(details map[string]interface{}) (Message, error) {
 	// For now, the tests just explicitly send a []interface{}
 	_authmethods, ok := details["authmethods"].([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("No authentication supplied")
+		return nil, fmt.Errorf("no authentication supplied")
 	}
 	authmethods := []string{}
 	for _, method := range _authmethods {

@@ -1,7 +1,9 @@
 package turnpike
 
-import "testing"
-import "time"
+import (
+	"testing"
+	"time"
+)
 
 const testRealm = URI("test.realm")
 
@@ -183,8 +185,6 @@ func TestRouterSubscribe(t *testing.T) {
 		// TODO: check Details, Arguments, ArgumentsKw
 	}
 }
-
-type basicCallee struct{}
 
 func TestRouterCall(t *testing.T) {
 	const testProcedure = URI("turnpike.test.endpoint")

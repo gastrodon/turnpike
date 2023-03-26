@@ -260,7 +260,6 @@ func (c *Client) Receive() {
 
 		case *Goodbye:
 			log.Println("client received Goodbye message")
-			break
 
 		default:
 			log.Println("unhandled message:", msg.MessageType(), msg)
@@ -453,7 +452,7 @@ func (c *Client) Unsubscribe(topic string) error {
 	}
 	<-sync
 	if !found {
-		return fmt.Errorf("Event %s is not registered with this client.", topic)
+		return fmt.Errorf("event %s is not registered with this client", topic)
 	}
 
 	id := NewID()
@@ -554,7 +553,7 @@ func (c *Client) Unregister(procedure string) error {
 	}
 	<-sync
 	if !found {
-		return fmt.Errorf("Procedure %s is not registered with this client.", procedure)
+		return fmt.Errorf("procedure %s is not registered with this client", procedure)
 	}
 	id := NewID()
 	c.registerListener(id)

@@ -144,7 +144,7 @@ func (br *defaultBroker) RemoveSession(sub *Session) {
 	br.lock.Lock()
 	defer br.lock.Unlock()
 
-	for id, _ := range br.sessions[sub] {
+	for id := range br.sessions[sub] {
 		topic, ok := br.subscriptions[id]
 		if !ok {
 			continue

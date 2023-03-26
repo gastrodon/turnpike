@@ -30,7 +30,7 @@ func NewWebsocketPeer(serialization Serialization, url string, requestHeader htt
 			new(MessagePackSerializer), websocket.BinaryMessage, tlscfg, dial,
 		)
 	default:
-		return nil, fmt.Errorf("Unsupported serialization: %v", serialization)
+		return nil, fmt.Errorf("unsupported serialization: %v", serialization)
 	}
 }
 

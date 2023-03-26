@@ -24,7 +24,7 @@ const (
 func apply(msgType MessageType, arr []interface{}) (Message, error) {
 	msg := msgType.New()
 	if msg == nil {
-		return nil, fmt.Errorf("Unsupported message type")
+		return nil, fmt.Errorf("unsupported message type")
 	}
 	val := reflect.ValueOf(msg)
 	if val.Kind() == reflect.Ptr {
@@ -44,7 +44,7 @@ func apply(msgType MessageType, arr []interface{}) (Message, error) {
 		} else if arg.Type().ConvertibleTo(f.Type()) {
 			f.Set(arg.Convert(f.Type()))
 		} else if f.Type().Kind() != arg.Type().Kind() {
-			return nil, fmt.Errorf("Message format error: %dth field not recognizable, got %s, expected %s", i+1, arg.Type(), f.Type())
+			return nil, fmt.Errorf("message format error: %dth field not recognizable, got %s, expected %s", i+1, arg.Type(), f.Type())
 		} else if f.Type().Kind() == reflect.Map {
 			if err := applyMap(f, arg); err != nil {
 				return nil, err
@@ -54,7 +54,7 @@ func apply(msgType MessageType, arr []interface{}) (Message, error) {
 				return nil, err
 			}
 		} else {
-			return nil, fmt.Errorf("Message format error: %dth field not recognizable", i+1)
+			return nil, fmt.Errorf("message format error: %dth field not recognizable", i+1)
 		}
 	}
 	return msg, nil
@@ -104,7 +104,7 @@ func applySlice(dst reflect.Value, src reflect.Value) error {
 	for i := 0; i < src.Len(); i++ {
 		v, err := convert(src.Index(i), dstElemType)
 		if err != nil {
-			return fmt.Errorf("Invalid %dth value: %s", i, err)
+			return fmt.Errorf("invalid %dth value: %s", i, err)
 		}
 		dst.Index(i).Set(v)
 	}
@@ -158,14 +158,14 @@ func (s *MessagePackSerializer) Deserialize(data []byte) (Message, error) {
 	if err := codec.NewDecoderBytes(data, new(codec.MsgpackHandle)).Decode(&arr); err != nil {
 		return nil, err
 	} else if len(arr) == 0 {
-		return nil, fmt.Errorf("Invalid message")
+		return nil, fmt.Errorf("invalid message")
 	}
 
 	var msgType MessageType
 	if typ, ok := arr[0].(int64); ok {
 		msgType = MessageType(typ)
 	} else {
-		return nil, fmt.Errorf("Unsupported message format")
+		return nil, fmt.Errorf("unsupported message format")
 	}
 
 	return apply(msgType, arr)
@@ -195,14 +195,14 @@ func (s *JSONSerializer) Deserialize(data []byte) (Message, error) {
 	if err := json.Unmarshal(data, &arr); err != nil {
 		return nil, err
 	} else if len(arr) == 0 {
-		return nil, fmt.Errorf("Invalid message")
+		return nil, fmt.Errorf("invalid message")
 	}
 
 	var msgType MessageType
 	if typ, ok := arr[0].(float64); ok {
 		msgType = MessageType(typ)
 	} else {
-		return nil, fmt.Errorf("Unsupported message format")
+		return nil, fmt.Errorf("unsupported message format")
 	}
 	return apply(msgType, arr)
 }
@@ -226,7 +226,7 @@ func (b *BinaryData) UnmarshalJSON(arr []byte) error {
 		return nil
 	}
 	if s[0] != '\x00' {
-		return fmt.Errorf("Not a binary string, doesn't start with a NUL: %v", arr)
+		return fmt.Errorf("not a binary string, doesn't start with a NUL: %v", arr)
 	}
 	*b, err = base64.StdEncoding.DecodeString(s[1:])
 	return err

@@ -128,11 +128,11 @@ func (d *defaultDealer) Call(caller *Session, msg *Call) {
 			invocationID := NewID()
 			d.invocations[invocationID] = msg.Request
 			d.lock.Unlock()
-			details := map[string]interface{}{};
+			details := map[string]interface{}{}
 
 			// Options{"disclose_me": true} -> Details{"caller": 3335656}
 			if val, ok := msg.Options["disclose_me"]; ok {
-				if disclose, ok := val.(bool); ok && (disclose == true) {
+				if disclose, ok := val.(bool); ok && disclose {
 					details["caller"] = caller.Id
 				}
 			}

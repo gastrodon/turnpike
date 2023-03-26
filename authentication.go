@@ -32,7 +32,7 @@ func (t *basicTicketAuthenticator) Challenge(details map[string]interface{}) (ma
 
 func (t *basicTicketAuthenticator) Authenticate(challenge map[string]interface{}, signature string) (map[string]interface{}, error) {
 	if !t.tickets[signature] {
-		return nil, fmt.Errorf("Invalid ticket")
+		return nil, fmt.Errorf("invalid ticket")
 	}
 	return nil, nil
 }
