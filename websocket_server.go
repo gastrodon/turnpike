@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	jsonWebsocketProtocol    = "wamp.2.json"
-	msgpackWebsocketProtocol = "wamp.2.msgpack"
+	jsonWebsocketProtocol    = "wamp.json"
+	msgpackWebsocketProtocol = "wamp.msgpack"
 )
 
 type invalidPayload byte
