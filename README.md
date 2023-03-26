@@ -1,4 +1,4 @@
-Turnpike [![Build Status](https://drone.io/github.com/jcelliott/turnpike/status.png)](https://drone.io/github.com/jcelliott/turnpike/latest) [![Coverage Status](https://coveralls.io/repos/jcelliott/turnpike/badge.svg?branch=v2)](https://coveralls.io/r/jcelliott/turnpike?branch=v2) [![GoDoc](https://godoc.org/gopkg.in/jcelliott/turnpike?status.svg)](http://godoc.org/gopkg.in/jcelliott/turnpike.v2)
+Turnpike [![Build Status](https://drone.io/github.com/jcelliott/turnpike/status.png)](https://drone.io/github.com/jcelliott/turnpike/latest) [![Coverage Status](https://coveralls.io/repos/jcelliott/turnpike/badge.svg?branch=v2)](https://coveralls.io/r/jcelliott/turnpike?branch=v2) [![GoDoc](https://godoc.org/gopkg.in/jcelliott/turnpike?status.svg)](http://godoc.org/github.com/gastrodon/turnpike)
 ===
 
 Go implementation of [WAMP](http://wamp.ws/) - The Web Application Messaging Protocol
@@ -32,11 +32,11 @@ Installation
 
 Library:
 
-    go get -u gopkg.in/jcelliott/turnpike.v2
+    go get -u github.com/gastrodon/turnpike
 
 Stand-alone router:
 
-    go get -u gopkg.in/jcelliott/turnpike.v2/turnpike
+    go get -u github.com/gastrodon/turnpike/turnpike
 
 Client library usage
 ---
@@ -56,7 +56,7 @@ import (
 	"log"
 	"net/http"
 
-	"gopkg.in/jcelliott/turnpike.v2"
+	"github.com/gastrodon/turnpike"
 )
 
 func main() {

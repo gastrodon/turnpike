@@ -8,8 +8,8 @@ import (
 	"log"
 	"time"
 
+	"github.com/gastrodon/turnpike"
 	"github.com/howeyc/gopass"
-	"gopkg.in/jcelliott/turnpike.v2"
 )
 
 var password []byte

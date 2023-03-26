@@ -8,8 +8,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gastrodon/turnpike"
 	"github.com/satori/go.uuid"
-	"gopkg.in/jcelliott/turnpike.v2"
 )
 
 // this is just an example, please don't actually use it

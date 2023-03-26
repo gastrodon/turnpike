@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"time"
 
-	"gopkg.in/jcelliott/turnpike.v2"
+	"github.com/gastrodon/turnpike"
 )
 
 var (
