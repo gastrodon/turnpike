@@ -121,7 +121,7 @@ func (c *Client) JoinRealm(realm string, details map[string]interface{}) (map[st
 
 // AuthFunc takes the HELLO details and CHALLENGE details and returns the
 // signature string and a details map
-type AuthFunc func(map[string]interface{}, map[string]interface{}) (string, map[string]interface{}, error)
+type AuthFunc func(hello, challenge map[string]interface{}) (string, map[string]interface{}, error)
 
 // joinRealmCRA joins a WAMP realm and handles challenge/response authentication.
 func (c *Client) joinRealmCRA(realm string, details map[string]interface{}) (map[string]interface{}, error) {
