@@ -10,7 +10,7 @@ type CRAuthenticator interface {
 	Challenge(details map[string]interface{}) (map[string]interface{}, error)
 	// accept a challenge map (same as was generated in Challenge) and a signature string, and
 	// authenticates the signature string against the challenge. Returns a details map and error.
-	Authenticate(challenge map[string]interface{}, signature string) (map[string]interface{}, error)
+	Authenticate(id ID, challenge map[string]interface{}, signature string) (map[string]interface{}, error)
 }
 
 // Authenticator describes a type that can handle authentication based solely on the HELLO message.
@@ -30,7 +30,7 @@ func (t *basicTicketAuthenticator) Challenge(details map[string]interface{}) (ma
 	return make(map[string]interface{}), nil
 }
 
-func (t *basicTicketAuthenticator) Authenticate(challenge map[string]interface{}, signature string) (map[string]interface{}, error) {
+func (t *basicTicketAuthenticator) Authenticate(_ ID, challenge map[string]interface{}, signature string) (map[string]interface{}, error) {
 	if !t.tickets[signature] {
 		return nil, fmt.Errorf("invalid ticket")
 	}

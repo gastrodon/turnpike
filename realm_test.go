@@ -82,7 +82,7 @@ func (t *testCRAuthenticator) Challenge(details map[string]interface{}) (map[str
 	}
 }
 
-func (t *testCRAuthenticator) Authenticate(challenge map[string]interface{}, signature string) (map[string]interface{}, error) {
+func (t *testCRAuthenticator) Authenticate(_ ID, challenge map[string]interface{}, signature string) (map[string]interface{}, error) {
 	if signature == testCRSign(challenge) {
 		return map[string]interface{}{"check": "testing"}, nil
 	}
@@ -121,14 +121,14 @@ func TestCRAuthenticator(t *testing.T) {
 			})
 			challenge := msg.(*Challenge)
 			Convey("When a client provides an invalid signature for the challenge", func() {
-				_, err := realm.checkResponse(challenge, &Authenticate{Signature: "bogus"})
+				_, err := realm.checkResponse(NewID(), challenge, &Authenticate{Signature: "bogus"})
 				Convey("CheckResponse should return an error", func() {
 					So(err, ShouldNotEqual, nil)
 				})
 			})
 			Convey("When a client provides a valid signature for the challenge", func() {
 				auth := &Authenticate{Signature: testCRSign(challenge.Extra)}
-				msg, err := realm.checkResponse(challenge, auth)
+				msg, err := realm.checkResponse(NewID(), challenge, auth)
 				Convey("CheckResponse should return a Welcome message", func() {
 					So(err, ShouldEqual, nil)
 					So(msg.MessageType(), ShouldEqual, WELCOME)

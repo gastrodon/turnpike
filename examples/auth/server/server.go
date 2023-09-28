@@ -9,7 +9,7 @@ import (
 	"net/http"
 
 	"github.com/gastrodon/turnpike"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 // this is just an example, please don't actually use it
@@ -21,7 +21,7 @@ func (e *exampleAuth) Challenge(details map[string]interface{}) (map[string]inte
 	return map[string]interface{}{"challenge": uuid.NewV4().String()}, nil
 }
 
-func (e *exampleAuth) Authenticate(c map[string]interface{}, signature string) (map[string]interface{}, error) {
+func (e *exampleAuth) Authenticate(_ turnpike.ID, c map[string]interface{}, signature string) (map[string]interface{}, error) {
 	// we assume this will work because turnpike gives us the same data the Challenge method returned
 	challenge := c["challenge"].(string)
 	mac := hmac.New(sha256.New, []byte(e.password))
