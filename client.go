@@ -364,10 +364,6 @@ func (c *Client) registerListener(id ID) {
 	<-sync
 }
 
-func (c *Client) waitOnListener(id ID) (msg Message, err error) {
-	return c.waitOnListenerContext(context.Background(), id)
-}
-
 // waitOnListenerContext blocks until a message arrives for id, the
 // ReceiveTimeout elapses, or ctx is cancelled — whichever comes first. The
 // listener is always removed before returning, on every exit path.
@@ -405,8 +401,16 @@ func (c *Client) waitOnListenerContext(ctx context.Context, id ID) (msg Message,
 // EventHandler handles a publish event.
 type EventHandler func(args []interface{}, kwargs map[string]interface{})
 
-// Subscribe registers the EventHandler to be called for every message in the provided topic.
+// Subscribe registers the EventHandler to be called for every message in the
+// provided topic. It is equivalent to SubscribeContext with a background context.
 func (c *Client) Subscribe(topic string, options map[string]interface{}, fn EventHandler) error {
+	return c.SubscribeContext(context.Background(), topic, options, fn)
+}
+
+// SubscribeContext registers the EventHandler to be called for every message in
+// the provided topic, bounding the wait for the SUBSCRIBED reply on ctx in
+// addition to the ReceiveTimeout.
+func (c *Client) SubscribeContext(ctx context.Context, topic string, options map[string]interface{}, fn EventHandler) error {
 	if options == nil {
 		options = make(map[string]interface{})
 	}
@@ -423,7 +427,7 @@ func (c *Client) Subscribe(topic string, options map[string]interface{}, fn Even
 	}
 	// wait to receive SUBSCRIBED message
 	var msg Message
-	if msg, err = c.waitOnListener(id); err != nil {
+	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error subscribing to topic '%v': %v", topic, e.Error)
@@ -441,8 +445,16 @@ func (c *Client) Subscribe(topic string, options map[string]interface{}, fn Even
 	return nil
 }
 
-// Unsubscribe removes the registered EventHandler from the topic.
+// Unsubscribe removes the registered EventHandler from the topic. It is
+// equivalent to UnsubscribeContext with a background context.
 func (c *Client) Unsubscribe(topic string) error {
+	return c.UnsubscribeContext(context.Background(), topic)
+}
+
+// UnsubscribeContext removes the registered EventHandler from the topic,
+// bounding the wait for the UNSUBSCRIBED reply on ctx in addition to the
+// ReceiveTimeout.
+func (c *Client) UnsubscribeContext(ctx context.Context, topic string) error {
 	var (
 		sync           = make(chan struct{})
 		subscriptionID ID
@@ -476,7 +488,7 @@ func (c *Client) Unsubscribe(topic string) error {
 		return err
 	}
 	// wait to receive UNSUBSCRIBED message
-	if msg, err = c.waitOnListener(id); err != nil {
+	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error unsubscribing to topic '%v': %v", topic, e.Error)
@@ -496,8 +508,15 @@ type MethodHandler func(
 	args []interface{}, kwargs map[string]interface{}, details map[string]interface{},
 ) (result *CallResult)
 
-// Register registers a MethodHandler procedure with the router.
+// Register registers a MethodHandler procedure with the router. It is
+// equivalent to RegisterContext with a background context.
 func (c *Client) Register(procedure string, fn MethodHandler, options map[string]interface{}) error {
+	return c.RegisterContext(context.Background(), procedure, fn, options)
+}
+
+// RegisterContext registers a MethodHandler procedure with the router, bounding
+// the wait for the REGISTERED reply on ctx in addition to the ReceiveTimeout.
+func (c *Client) RegisterContext(ctx context.Context, procedure string, fn MethodHandler, options map[string]interface{}) error {
 	id := NewID()
 	c.registerListener(id)
 	register := &Register{
@@ -512,7 +531,7 @@ func (c *Client) Register(procedure string, fn MethodHandler, options map[string
 
 	// wait to receive REGISTERED message
 	var msg Message
-	if msg, err = c.waitOnListener(id); err != nil {
+	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error registering procedure '%v': %v", procedure, e.Error)
@@ -542,8 +561,15 @@ func (c *Client) BasicRegister(procedure string, fn BasicMethodHandler) error {
 	return c.Register(procedure, wrap, make(map[string]interface{}))
 }
 
-// Unregister removes a procedure with the router
+// Unregister removes a procedure with the router. It is equivalent to
+// UnregisterContext with a background context.
 func (c *Client) Unregister(procedure string) error {
+	return c.UnregisterContext(context.Background(), procedure)
+}
+
+// UnregisterContext removes a procedure with the router, bounding the wait for
+// the UNREGISTERED reply on ctx in addition to the ReceiveTimeout.
+func (c *Client) UnregisterContext(ctx context.Context, procedure string) error {
 	var (
 		sync        = make(chan struct{})
 		procedureID ID
@@ -576,7 +602,7 @@ func (c *Client) Unregister(procedure string) error {
 	}
 
 	// wait to receive UNREGISTERED message
-	if msg, err = c.waitOnListener(id); err != nil {
+	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error unregister to procedure '%v': %v", procedure, e.Error)
