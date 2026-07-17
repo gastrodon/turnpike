@@ -30,13 +30,15 @@ type Peer interface {
 // GetMessageTimeout is a convenience function to get a single message from a
 // peer within a specified period of time
 func GetMessageTimeout(ctx context.Context, p Peer, t time.Duration) (Message, error) {
+	timer := time.NewTimer(t)
+	defer timer.Stop()
 	select {
 	case msg, open := <-p.Receive():
 		if !open {
 			return nil, fmt.Errorf("receive channel closed")
 		}
 		return msg, nil
-	case <-time.After(t):
+	case <-timer.C:
 		return nil, fmt.Errorf("timeout waiting for message")
 	case <-ctx.Done():
 		return nil, ctx.Err()

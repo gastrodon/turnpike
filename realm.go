@@ -219,7 +219,7 @@ func (r *Realm) handleSession(sess *Session) {
 	}
 }
 
-func (r *Realm) handleAuth(client Peer, details map[string]interface{}) (*Welcome, error) {
+func (r *Realm) handleAuth(peer Peer, details map[string]interface{}) (*Welcome, error) {
 	msg, err := r.authenticate(details)
 	if err != nil {
 		return nil, err
@@ -230,11 +230,11 @@ func (r *Realm) handleAuth(client Peer, details map[string]interface{}) (*Welcom
 	}
 	// Challenge response
 	challenge := msg.(*Challenge)
-	if err := client.Send(challenge); err != nil {
+	if err := peer.Send(challenge); err != nil {
 		return nil, err
 	}
 
-	msg, err = GetMessageTimeout(context.Background(), client, r.AuthTimeout)
+	msg, err = GetMessageTimeout(context.Background(), peer, r.AuthTimeout)
 	if err != nil {
 		return nil, err
 	}
