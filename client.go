@@ -364,10 +364,10 @@ func (c *Client) registerListener(id ID) {
 	<-sync
 }
 
-// waitOnListenerContext blocks until a message arrives for id, the
-// ReceiveTimeout elapses, or ctx is cancelled — whichever comes first. The
-// listener is always removed before returning, on every exit path.
-func (c *Client) waitOnListenerContext(ctx context.Context, id ID) (msg Message, err error) {
+// waitOnListener blocks until a message arrives for id, the ReceiveTimeout
+// elapses, or ctx is cancelled — whichever comes first. The listener is always
+// removed before returning, on every exit path.
+func (c *Client) waitOnListener(ctx context.Context, id ID) (msg Message, err error) {
 	log.Println("wait on listener:", id)
 	var (
 		sync = make(chan struct{})
@@ -402,15 +402,9 @@ func (c *Client) waitOnListenerContext(ctx context.Context, id ID) (msg Message,
 type EventHandler func(args []interface{}, kwargs map[string]interface{})
 
 // Subscribe registers the EventHandler to be called for every message in the
-// provided topic. It is equivalent to SubscribeContext with a background context.
-func (c *Client) Subscribe(topic string, options map[string]interface{}, fn EventHandler) error {
-	return c.SubscribeContext(context.Background(), topic, options, fn)
-}
-
-// SubscribeContext registers the EventHandler to be called for every message in
-// the provided topic, bounding the wait for the SUBSCRIBED reply on ctx in
-// addition to the ReceiveTimeout.
-func (c *Client) SubscribeContext(ctx context.Context, topic string, options map[string]interface{}, fn EventHandler) error {
+// provided topic, bounding the wait for the SUBSCRIBED reply on ctx in addition
+// to the ReceiveTimeout.
+func (c *Client) Subscribe(ctx context.Context, topic string, options map[string]interface{}, fn EventHandler) error {
 	if options == nil {
 		options = make(map[string]interface{})
 	}
@@ -427,7 +421,7 @@ func (c *Client) SubscribeContext(ctx context.Context, topic string, options map
 	}
 	// wait to receive SUBSCRIBED message
 	var msg Message
-	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
+	if msg, err = c.waitOnListener(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error subscribing to topic '%v': %v", topic, e.Error)
@@ -445,16 +439,9 @@ func (c *Client) SubscribeContext(ctx context.Context, topic string, options map
 	return nil
 }
 
-// Unsubscribe removes the registered EventHandler from the topic. It is
-// equivalent to UnsubscribeContext with a background context.
-func (c *Client) Unsubscribe(topic string) error {
-	return c.UnsubscribeContext(context.Background(), topic)
-}
-
-// UnsubscribeContext removes the registered EventHandler from the topic,
-// bounding the wait for the UNSUBSCRIBED reply on ctx in addition to the
-// ReceiveTimeout.
-func (c *Client) UnsubscribeContext(ctx context.Context, topic string) error {
+// Unsubscribe removes the registered EventHandler from the topic, bounding the
+// wait for the UNSUBSCRIBED reply on ctx in addition to the ReceiveTimeout.
+func (c *Client) Unsubscribe(ctx context.Context, topic string) error {
 	var (
 		sync           = make(chan struct{})
 		subscriptionID ID
@@ -488,7 +475,7 @@ func (c *Client) UnsubscribeContext(ctx context.Context, topic string) error {
 		return err
 	}
 	// wait to receive UNSUBSCRIBED message
-	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
+	if msg, err = c.waitOnListener(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error unsubscribing to topic '%v': %v", topic, e.Error)
@@ -508,15 +495,9 @@ type MethodHandler func(
 	args []interface{}, kwargs map[string]interface{}, details map[string]interface{},
 ) (result *CallResult)
 
-// Register registers a MethodHandler procedure with the router. It is
-// equivalent to RegisterContext with a background context.
-func (c *Client) Register(procedure string, fn MethodHandler, options map[string]interface{}) error {
-	return c.RegisterContext(context.Background(), procedure, fn, options)
-}
-
-// RegisterContext registers a MethodHandler procedure with the router, bounding
-// the wait for the REGISTERED reply on ctx in addition to the ReceiveTimeout.
-func (c *Client) RegisterContext(ctx context.Context, procedure string, fn MethodHandler, options map[string]interface{}) error {
+// Register registers a MethodHandler procedure with the router, bounding the
+// wait for the REGISTERED reply on ctx in addition to the ReceiveTimeout.
+func (c *Client) Register(ctx context.Context, procedure string, fn MethodHandler, options map[string]interface{}) error {
 	id := NewID()
 	c.registerListener(id)
 	register := &Register{
@@ -531,7 +512,7 @@ func (c *Client) RegisterContext(ctx context.Context, procedure string, fn Metho
 
 	// wait to receive REGISTERED message
 	var msg Message
-	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
+	if msg, err = c.waitOnListener(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error registering procedure '%v': %v", procedure, e.Error)
@@ -553,23 +534,17 @@ func (c *Client) RegisterContext(ctx context.Context, procedure string, fn Metho
 type BasicMethodHandler func(args []interface{}, kwargs map[string]interface{}) (result *CallResult)
 
 // BasicRegister registers a BasicMethodHandler procedure with the router
-func (c *Client) BasicRegister(procedure string, fn BasicMethodHandler) error {
+func (c *Client) BasicRegister(ctx context.Context, procedure string, fn BasicMethodHandler) error {
 	wrap := func(args []interface{}, kwargs map[string]interface{},
 		details map[string]interface{}) (result *CallResult) {
 		return fn(args, kwargs)
 	}
-	return c.Register(procedure, wrap, make(map[string]interface{}))
+	return c.Register(ctx, procedure, wrap, make(map[string]interface{}))
 }
 
-// Unregister removes a procedure with the router. It is equivalent to
-// UnregisterContext with a background context.
-func (c *Client) Unregister(procedure string) error {
-	return c.UnregisterContext(context.Background(), procedure)
-}
-
-// UnregisterContext removes a procedure with the router, bounding the wait for
-// the UNREGISTERED reply on ctx in addition to the ReceiveTimeout.
-func (c *Client) UnregisterContext(ctx context.Context, procedure string) error {
+// Unregister removes a procedure with the router, bounding the wait for the
+// UNREGISTERED reply on ctx in addition to the ReceiveTimeout.
+func (c *Client) Unregister(ctx context.Context, procedure string) error {
 	var (
 		sync        = make(chan struct{})
 		procedureID ID
@@ -602,7 +577,7 @@ func (c *Client) UnregisterContext(ctx context.Context, procedure string) error 
 	}
 
 	// wait to receive UNREGISTERED message
-	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
+	if msg, err = c.waitOnListener(ctx, id); err != nil {
 		return err
 	} else if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error unregister to procedure '%v': %v", procedure, e.Error)
@@ -641,19 +616,12 @@ func (rpc RPCError) Error() string {
 	return fmt.Sprintf("error calling procedure '%v': %v: %v: %v", rpc.Procedure, rpc.ErrorMessage.Error, rpc.ErrorMessage.Arguments, rpc.ErrorMessage.ArgumentsKw)
 }
 
-// Call calls a procedure given a URI, blocking until a result arrives or the
-// ReceiveTimeout elapses. It is equivalent to CallContext with a background
-// context.
-func (c *Client) Call(procedure string, options map[string]interface{}, args []interface{}, kwargs map[string]interface{}) (*Result, error) {
-	return c.CallContext(context.Background(), procedure, options, args, kwargs)
-}
-
-// CallContext calls a procedure given a URI and waits for the result. In
-// addition to the ReceiveTimeout, the wait is bounded by ctx: if ctx is
-// cancelled before a result arrives, CallContext returns ctx.Err() and stops
-// listening for the response. Cancelling ctx does not unsend an already-sent
-// CALL; it only abandons the wait on this side.
-func (c *Client) CallContext(ctx context.Context, procedure string, options map[string]interface{}, args []interface{}, kwargs map[string]interface{}) (*Result, error) {
+// Call calls a procedure given a URI and waits for the result. In addition to
+// the ReceiveTimeout, the wait is bounded by ctx: if ctx is cancelled before a
+// result arrives, Call returns ctx.Err() and stops listening for the response.
+// Cancelling ctx does not unsend an already-sent CALL; it only abandons the
+// wait on this side.
+func (c *Client) Call(ctx context.Context, procedure string, options map[string]interface{}, args []interface{}, kwargs map[string]interface{}) (*Result, error) {
 	id := NewID()
 	c.registerListener(id)
 
@@ -671,7 +639,7 @@ func (c *Client) CallContext(ctx context.Context, procedure string, options map[
 
 	// wait to receive RESULT message
 	var msg Message
-	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
+	if msg, err = c.waitOnListener(ctx, id); err != nil {
 		return nil, err
 	} else if e, ok := msg.(*Error); ok {
 		return nil, RPCError{e, procedure}

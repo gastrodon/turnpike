@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -18,7 +19,7 @@ func main() {
 		Addr:    ":8000",
 	}
 	client, _ = s.GetLocalClient("turnpike.examples", nil)
-	if err := client.Register("alarm.set", alarmSet, make(map[string]interface{})); err != nil {
+	if err := client.Register(context.Background(), "alarm.set", alarmSet, make(map[string]interface{})); err != nil {
 		panic(err)
 	}
 	log.Println("turnpike server starting on port 8000")

@@ -1,6 +1,7 @@
 package turnpike
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -68,7 +69,7 @@ func TestRemoteCall(t *testing.T) {
 		callee, caller := connectedTestClients()
 
 		Convey("The callee unregisters an invalid method", func() {
-			err := callee.Unregister("invalidmethod")
+			err := callee.Unregister(context.Background(), "invalidmethod")
 			Convey("And expects an error", func() {
 				So(err, ShouldNotBeNil)
 			})
@@ -79,14 +80,14 @@ func TestRemoteCall(t *testing.T) {
 				return &CallResult{Args: []interface{}{args[0].(int) * 2}}
 			}
 			methodName := "mymethod"
-			err := callee.BasicRegister(methodName, handler)
+			err := callee.BasicRegister(context.Background(), methodName, handler)
 
 			Convey("And expects no error", func() {
 				So(err, ShouldBeNil)
 
 				Convey("The caller calls the callee's remote method", func() {
 					callArgs := []interface{}{5100}
-					result, err := caller.Call(methodName, make(map[string]interface{}), callArgs, make(map[string]interface{}))
+					result, err := caller.Call(context.Background(), methodName, make(map[string]interface{}), callArgs, make(map[string]interface{}))
 
 					Convey("And succeeds at multiplying the number by 2", func() {
 						So(err, ShouldBeNil)
@@ -96,14 +97,14 @@ func TestRemoteCall(t *testing.T) {
 			})
 
 			Convey("And unregisters the method", func() {
-				err := callee.Unregister(methodName)
+				err := callee.Unregister(context.Background(), methodName)
 				Convey("And expects no error", func() {
 					So(err, ShouldBeNil)
 				})
 
 				Convey("Calling the unregistered procedure", func() {
 					callArgs := []interface{}{5100}
-					result, err := caller.Call(methodName, make(map[string]interface{}), callArgs, make(map[string]interface{}))
+					result, err := caller.Call(context.Background(), methodName, make(map[string]interface{}), callArgs, make(map[string]interface{}))
 
 					Convey("Should result in an error", func() {
 						So(err, ShouldNotBeNil)

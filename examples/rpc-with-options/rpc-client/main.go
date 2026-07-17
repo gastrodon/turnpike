@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -21,8 +22,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	ctx := context.Background()
 	quit := make(chan bool)
-	c.Subscribe("alarm.ring", nil, func([]interface{}, map[string]interface{}) {
+	c.Subscribe(ctx, "alarm.ring", nil, func([]interface{}, map[string]interface{}) {
 		fmt.Println("The alarm rang!")
 		c.Close()
 		quit <- true
@@ -38,7 +40,7 @@ func main() {
 		log.Fatalln("invalid integer input:", err)
 	} else {
 		// Call method with disclose option for Caller Identification (https://tools.ietf.org/html/draft-oberstet-hybi-tavendo-wamp-02#section-13.3.5)
-		if _, err := c.Call("alarm.set", map[string]interface{}{"disclose_me": true}, []interface{}{duration}, nil); err != nil {
+		if _, err := c.Call(ctx, "alarm.set", map[string]interface{}{"disclose_me": true}, []interface{}{duration}, nil); err != nil {
 			log.Fatalln("error setting alarm:", err)
 		}
 	}
