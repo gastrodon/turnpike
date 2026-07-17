@@ -122,7 +122,7 @@ func (r *defaultRouter) Accept(peer Peer) error {
 		return NoSuchRealmError(hello.Realm)
 	}
 
-	welcome, err := realm.handleAuth(peer, hello.Details)
+	welcome, err := realm.handleAuth(NewID(), peer, hello.Details)
 	if err != nil {
 		abort := &Abort{
 			Reason:  ErrAuthorizationFailed, // TODO: should this be AuthenticationFailed?
@@ -132,8 +132,6 @@ func (r *defaultRouter) Accept(peer Peer) error {
 		logErr(peer.Close())
 		return AuthenticationError(err.Error())
 	}
-
-	welcome.Id = NewID()
 
 	if welcome.Details == nil {
 		welcome.Details = make(map[string]interface{})

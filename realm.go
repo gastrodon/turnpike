@@ -219,14 +219,16 @@ func (r *Realm) handleSession(sess *Session) {
 	}
 }
 
-func (r *Realm) handleAuth(peer Peer, details map[string]interface{}) (*Welcome, error) {
+func (r *Realm) handleAuth(welcomeID ID, peer Peer, details map[string]interface{}) (*Welcome, error) {
 	msg, err := r.authenticate(details)
 	if err != nil {
 		return nil, err
 	}
 	// we should never get anything besides WELCOME and CHALLENGE
 	if msg.MessageType() == WELCOME {
-		return msg.(*Welcome), nil
+		welcome := msg.(*Welcome)
+		welcome.Id = welcomeID
+		return welcome, nil
 	}
 	// Challenge response
 	challenge := msg.(*Challenge)
@@ -244,7 +246,7 @@ func (r *Realm) handleAuth(peer Peer, details map[string]interface{}) (*Welcome,
 	if authenticate, ok := msg.(*Authenticate); !ok {
 		return nil, fmt.Errorf("unexpected %s message received", msg.MessageType())
 	} else {
-		return r.checkResponse(challenge, authenticate)
+		return r.checkResponse(welcomeID, challenge, authenticate)
 	}
 }
 
@@ -291,12 +293,12 @@ func (r Realm) authenticate(details map[string]interface{}) (Message, error) {
 }
 
 // checkResponse determines whether the response to the challenge is sufficient to gain access to the Realm.
-func (r Realm) checkResponse(chal *Challenge, auth *Authenticate) (*Welcome, error) {
+func (r Realm) checkResponse(welcomeID ID, chal *Challenge, auth *Authenticate) (*Welcome, error) {
 	authenticator, ok := r.CRAuthenticators[chal.AuthMethod]
 	if !ok {
 		return nil, fmt.Errorf("authentication method has been removed")
 	}
-	if details, err := authenticator.Authenticate(chal.Extra, auth.Signature); err != nil {
+	if details, err := authenticator.Authenticate(welcomeID, chal.Extra, auth.Signature); err != nil {
 		return nil, err
 	} else {
 		return &Welcome{Details: addAuthMethod(details, chal.AuthMethod)}, nil
