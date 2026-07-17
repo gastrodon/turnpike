@@ -393,15 +393,13 @@ func (c *Client) waitOnListener(ctx context.Context, id ID) (msg Message, err er
 	if !ok {
 		return nil, fmt.Errorf("unknown listener ID: %v", id)
 	}
-	timer := time.NewTimer(c.ReceiveTimeout)
-	defer timer.Stop()
+	ctx, cancel := context.WithTimeout(ctx, c.ReceiveTimeout)
+	defer cancel()
 	select {
 	case msg, ok = <-wait:
 		if !ok {
 			return nil, fmt.Errorf("listener closed while waiting for message")
 		}
-	case <-timer.C:
-		err = fmt.Errorf("timeout while waiting for message")
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
