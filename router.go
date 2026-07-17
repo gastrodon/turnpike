@@ -1,6 +1,7 @@
 package turnpike
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -99,7 +100,7 @@ func (r *defaultRouter) Accept(client Peer) error {
 		return fmt.Errorf("Router is closing, no new connections are allowed")
 	}
 
-	msg, err := GetMessageTimeout(client, 5*time.Second)
+	msg, err := GetMessageTimeout(context.Background(), client, 5*time.Second)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package turnpike
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -233,7 +234,7 @@ func (r *Realm) handleAuth(client Peer, details map[string]interface{}) (*Welcom
 		return nil, err
 	}
 
-	msg, err = GetMessageTimeout(client, r.AuthTimeout)
+	msg, err = GetMessageTimeout(context.Background(), client, r.AuthTimeout)
 	if err != nil {
 		return nil, err
 	}

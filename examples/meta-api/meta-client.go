@@ -13,13 +13,13 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("connected to router")
-	_, err = c.JoinRealm("turnpike.examples", nil)
+	ctx := context.Background()
+	_, err = c.JoinRealm(ctx, "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("joined realm")
 	c.ReceiveDone = make(chan bool)
-	ctx := context.Background()
 
 	onJoin := func(args []interface{}, kwargs map[string]interface{}) {
 		log.Println("session joined:", args[0])

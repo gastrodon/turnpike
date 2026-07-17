@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -40,7 +41,7 @@ func main() {
 		log.Fatal(err)
 	}
 	c.Auth = map[string]turnpike.AuthFunc{"example-auth": exampleAuthFunc}
-	_, err = c.JoinRealm("turnpike.examples", nil)
+	_, err = c.JoinRealm(context.Background(), "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
 	}

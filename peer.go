@@ -1,6 +1,7 @@
 package turnpike
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -28,7 +29,7 @@ type Peer interface {
 
 // GetMessageTimeout is a convenience function to get a single message from a
 // peer within a specified period of time
-func GetMessageTimeout(p Peer, t time.Duration) (Message, error) {
+func GetMessageTimeout(ctx context.Context, p Peer, t time.Duration) (Message, error) {
 	select {
 	case msg, open := <-p.Receive():
 		if !open {
@@ -37,5 +38,7 @@ func GetMessageTimeout(p Peer, t time.Duration) (Message, error) {
 		return msg, nil
 	case <-time.After(t):
 		return nil, fmt.Errorf("timeout waiting for message")
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }

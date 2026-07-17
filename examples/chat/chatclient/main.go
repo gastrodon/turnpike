@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = c.JoinRealm("turnpike.examples", nil)
+	_, err = c.JoinRealm(context.Background(), "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
 	}

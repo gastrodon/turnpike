@@ -24,7 +24,7 @@ func connectedTestClients() (*Client, *Client) {
 func newTestClient(p Peer) *Client {
 	client := NewClient(p)
 	client.ReceiveTimeout = 100 * time.Millisecond
-	_, err := client.JoinRealm("turnpike.test", nil)
+	_, err := client.JoinRealm(context.Background(), "turnpike.test", nil)
 	So(err, ShouldBeNil)
 	return client
 }
@@ -35,8 +35,16 @@ func TestJoinRealm(t *testing.T) {
 
 		Convey("A client should be able to succesfully join a realm", func() {
 			client := NewClient(peer)
-			_, err := client.JoinRealm("turnpike.test", nil)
+			_, err := client.JoinRealm(context.Background(), "turnpike.test", nil)
 			So(err, ShouldBeNil)
+		})
+
+		Convey("Joining with a cancelled context should return context.Canceled", func() {
+			client := NewClient(peer)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			_, err := client.JoinRealm(ctx, "turnpike.test", nil)
+			So(err, ShouldEqual, context.Canceled)
 		})
 	})
 }
@@ -58,8 +66,18 @@ func TestJoinRealmWithAuth(t *testing.T) {
 			client := NewClient(peer)
 			client.Auth = map[string]AuthFunc{"testauth": testAuthFunc}
 			details := map[string]interface{}{"username": "tester"}
-			_, err := client.JoinRealm("turnpike.test.auth", details)
+			_, err := client.JoinRealm(context.Background(), "turnpike.test.auth", details)
 			So(err, ShouldBeNil)
+		})
+
+		Convey("Authenticating with a cancelled context should return context.Canceled", func() {
+			client := NewClient(peer)
+			client.Auth = map[string]AuthFunc{"testauth": testAuthFunc}
+			details := map[string]interface{}{"username": "tester"}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			_, err := client.JoinRealm(ctx, "turnpike.test.auth", details)
+			So(err, ShouldEqual, context.Canceled)
 		})
 	})
 }

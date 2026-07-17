@@ -17,12 +17,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = c.JoinRealm("turnpike.examples", nil)
+	ctx := context.Background()
+	_, err = c.JoinRealm(ctx, "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	ctx := context.Background()
 	quit := make(chan bool)
 	c.Subscribe(ctx, "alarm.ring", nil, func([]interface{}, map[string]interface{}) {
 		fmt.Println("The alarm rang!")

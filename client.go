@@ -92,20 +92,23 @@ func (c *Client) run() {
 }
 
 // JoinRealm joins a WAMP realm, but does not handle challenge/response authentication.
-func (c *Client) JoinRealm(realm string, details map[string]interface{}) (map[string]interface{}, error) {
+//
+// Cancelling ctx does not un-send the HELLO; if the router has already accepted,
+// this closes the connection without acknowledging it.
+func (c *Client) JoinRealm(ctx context.Context, realm string, details map[string]interface{}) (map[string]interface{}, error) {
 	if details == nil {
 		details = map[string]interface{}{}
 	}
 	details["roles"] = clientRoles()
 	if c.Auth != nil && len(c.Auth) > 0 {
-		return c.joinRealmCRA(realm, details)
+		return c.joinRealmCRA(ctx, realm, details)
 	}
 	if err := c.Send(&Hello{Realm: URI(realm), Details: details}); err != nil {
 		c.Peer.Close()
 		close(c.acts)
 		return nil, err
 	}
-	if msg, err := GetMessageTimeout(c.Peer, c.ReceiveTimeout); err != nil {
+	if msg, err := GetMessageTimeout(ctx, c.Peer, c.ReceiveTimeout); err != nil {
 		c.Peer.Close()
 		close(c.acts)
 		return nil, err
@@ -125,7 +128,7 @@ func (c *Client) JoinRealm(realm string, details map[string]interface{}) (map[st
 type AuthFunc func(hello, challenge map[string]interface{}) (string, map[string]interface{}, error)
 
 // joinRealmCRA joins a WAMP realm and handles challenge/response authentication.
-func (c *Client) joinRealmCRA(realm string, details map[string]interface{}) (map[string]interface{}, error) {
+func (c *Client) joinRealmCRA(ctx context.Context, realm string, details map[string]interface{}) (map[string]interface{}, error) {
 	authmethods := []interface{}{}
 	for m := range c.Auth {
 		authmethods = append(authmethods, m)
@@ -136,7 +139,7 @@ func (c *Client) joinRealmCRA(realm string, details map[string]interface{}) (map
 		close(c.acts)
 		return nil, err
 	}
-	if msg, err := GetMessageTimeout(c.Peer, c.ReceiveTimeout); err != nil {
+	if msg, err := GetMessageTimeout(ctx, c.Peer, c.ReceiveTimeout); err != nil {
 		c.Peer.Close()
 		close(c.acts)
 		return nil, err
@@ -160,7 +163,7 @@ func (c *Client) joinRealmCRA(realm string, details map[string]interface{}) (map
 		close(c.acts)
 		return nil, err
 	}
-	if msg, err := GetMessageTimeout(c.Peer, c.ReceiveTimeout); err != nil {
+	if msg, err := GetMessageTimeout(ctx, c.Peer, c.ReceiveTimeout); err != nil {
 		c.Peer.Close()
 		close(c.acts)
 		return nil, err
