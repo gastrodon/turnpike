@@ -3,6 +3,7 @@ package turnpike
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -35,12 +36,11 @@ type Client struct {
 	// Auth is a map of WAMP authmethods to functions that will handle each auth type
 	Auth map[string]AuthFunc
 	// ReceiveDone is notified when the client's connection to the router is lost.
-	ReceiveDone  chan bool
-	listeners    map[ID]chan Message
-	events       map[ID]*eventDesc
-	procedures   map[ID]*procedureDesc
-	acts         chan func()
-	requestCount uint
+	ReceiveDone chan struct{}
+	listeners   map[ID]chan Message
+	events      map[ID]*eventDesc
+	procedures  map[ID]*procedureDesc
+	acts        chan func()
 }
 
 type procedureDesc struct {
@@ -72,7 +72,6 @@ func NewClient(p Peer) *Client {
 		events:         make(map[ID]*eventDesc),
 		procedures:     make(map[ID]*procedureDesc),
 		acts:           make(chan func()),
-		requestCount:   0,
 	}
 	go c.run()
 	return c
@@ -89,6 +88,25 @@ func (c *Client) run() {
 			return
 		}
 	}
+}
+
+// do runs fn on the client's actor goroutine and blocks until it completes, so
+// fn has exclusive access to the client's maps.
+func (c *Client) do(fn func()) {
+	sync := make(chan struct{})
+	c.acts <- func() {
+		fn()
+		close(sync)
+	}
+	<-sync
+}
+
+// fail closes the peer and the actor loop, returning err. Used on the handshake
+// error paths before the client is fully established.
+func (c *Client) fail(err error) error {
+	c.Peer.Close()
+	close(c.acts)
+	return err
 }
 
 // getMessage waits for a single message from the peer, bounded by ctx and the
@@ -108,27 +126,23 @@ func (c *Client) JoinRealm(ctx context.Context, realm string, details map[string
 		details = map[string]interface{}{}
 	}
 	details["roles"] = clientRoles()
-	if c.Auth != nil && len(c.Auth) > 0 {
+	if len(c.Auth) > 0 {
 		return c.joinRealmCRA(ctx, realm, details)
 	}
 	if err := c.Send(&Hello{Realm: URI(realm), Details: details}); err != nil {
-		c.Peer.Close()
-		close(c.acts)
-		return nil, err
+		return nil, c.fail(err)
 	}
-	if msg, err := c.getMessage(ctx); err != nil {
-		c.Peer.Close()
-		close(c.acts)
-		return nil, err
-	} else if welcome, ok := msg.(*Welcome); !ok {
+	msg, err := c.getMessage(ctx)
+	if err != nil {
+		return nil, c.fail(err)
+	}
+	welcome, ok := msg.(*Welcome)
+	if !ok {
 		c.Send(abortUnexpectedMsg)
-		c.Peer.Close()
-		close(c.acts)
-		return nil, fmt.Errorf(formatUnexpectedMessage(msg, WELCOME))
-	} else {
-		go c.Receive()
-		return welcome.Details, nil
+		return nil, c.fail(errors.New(formatUnexpectedMessage(msg, WELCOME)))
 	}
+	go c.Receive()
+	return welcome.Details, nil
 }
 
 // AuthFunc takes the HELLO details and CHALLENGE details and returns the
@@ -143,47 +157,43 @@ func (c *Client) joinRealmCRA(ctx context.Context, realm string, details map[str
 	}
 	details["authmethods"] = authmethods
 	if err := c.Send(&Hello{Realm: URI(realm), Details: details}); err != nil {
-		c.Peer.Close()
-		close(c.acts)
-		return nil, err
+		return nil, c.fail(err)
 	}
-	if msg, err := c.getMessage(ctx); err != nil {
-		c.Peer.Close()
-		close(c.acts)
-		return nil, err
-	} else if challenge, ok := msg.(*Challenge); !ok {
+
+	msg, err := c.getMessage(ctx)
+	if err != nil {
+		return nil, c.fail(err)
+	}
+	challenge, ok := msg.(*Challenge)
+	if !ok {
 		c.Send(abortUnexpectedMsg)
-		c.Peer.Close()
-		close(c.acts)
-		return nil, fmt.Errorf(formatUnexpectedMessage(msg, CHALLENGE))
-	} else if authFunc, ok := c.Auth[challenge.AuthMethod]; !ok {
+		return nil, c.fail(errors.New(formatUnexpectedMessage(msg, CHALLENGE)))
+	}
+	authFunc, ok := c.Auth[challenge.AuthMethod]
+	if !ok {
 		c.Send(abortNoAuthHandler)
-		c.Peer.Close()
-		close(c.acts)
-		return nil, fmt.Errorf("no auth handler for method: %s", challenge.AuthMethod)
-	} else if signature, authDetails, err := authFunc(details, challenge.Extra); err != nil {
+		return nil, c.fail(fmt.Errorf("no auth handler for method: %s", challenge.AuthMethod))
+	}
+	signature, authDetails, err := authFunc(details, challenge.Extra)
+	if err != nil {
 		c.Send(abortAuthFailure)
-		c.Peer.Close()
-		close(c.acts)
-		return nil, err
-	} else if err := c.Send(&Authenticate{Signature: signature, Extra: authDetails}); err != nil {
-		c.Peer.Close()
-		close(c.acts)
-		return nil, err
+		return nil, c.fail(err)
 	}
-	if msg, err := c.getMessage(ctx); err != nil {
-		c.Peer.Close()
-		close(c.acts)
-		return nil, err
-	} else if welcome, ok := msg.(*Welcome); !ok {
+	if err := c.Send(&Authenticate{Signature: signature, Extra: authDetails}); err != nil {
+		return nil, c.fail(err)
+	}
+
+	msg, err = c.getMessage(ctx)
+	if err != nil {
+		return nil, c.fail(err)
+	}
+	welcome, ok := msg.(*Welcome)
+	if !ok {
 		c.Send(abortUnexpectedMsg)
-		c.Peer.Close()
-		close(c.acts)
-		return nil, fmt.Errorf(formatUnexpectedMessage(msg, WELCOME))
-	} else {
-		go c.Receive()
-		return welcome.Details, nil
+		return nil, c.fail(errors.New(formatUnexpectedMessage(msg, WELCOME)))
 	}
+	go c.Receive()
+	return welcome.Details, nil
 }
 
 func clientRoles() map[string]map[string]interface{} {
@@ -238,11 +248,6 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// func (c *Client) nextID() ID {
-// 	c.requestCount++
-// 	return ID(c.requestCount)
-// }
-
 // Receive handles messages from the server until this client disconnects.
 //
 // This function blocks and is most commonly run in a goroutine.
@@ -282,35 +287,29 @@ func (c *Client) Receive() {
 	log.Println("client closed")
 
 	if c.ReceiveDone != nil {
-		c.ReceiveDone <- true
+		c.ReceiveDone <- struct{}{}
 	}
 }
 
 func (c *Client) handleEvent(msg *Event) {
-	sync := make(chan struct{})
-	c.acts <- func() {
+	c.do(func() {
 		if event, ok := c.events[msg.Subscription]; ok {
 			go event.handler(msg.Arguments, msg.ArgumentsKw)
 		} else {
 			log.Println("no handler registered for subscription:", msg.Subscription)
 		}
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 }
 
 func (c *Client) notifyListener(msg Message, requestID ID) {
 	// pass in the request ID so we don't have to do any type assertion
 	var (
-		sync = make(chan struct{})
-		l    chan Message
-		ok   bool
+		l  chan Message
+		ok bool
 	)
-	c.acts <- func() {
+	c.do(func() {
 		l, ok = c.listeners[requestID]
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 	if ok {
 		l <- msg
 	} else {
@@ -319,8 +318,7 @@ func (c *Client) notifyListener(msg Message, requestID ID) {
 }
 
 func (c *Client) handleInvocation(msg *Invocation) {
-	sync := make(chan struct{})
-	c.acts <- func() {
+	c.do(func() {
 		if proc, ok := c.procedures[msg.Registration]; ok {
 			go func() {
 				result := proc.handler(msg.Arguments, msg.ArgumentsKw, msg.Details)
@@ -359,20 +357,15 @@ func (c *Client) handleInvocation(msg *Invocation) {
 				log.Println("error sending message:", err)
 			}
 		}
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 }
 
 func (c *Client) registerListener(id ID) {
 	log.Println("register listener:", id)
 	wait := make(chan Message, 1)
-	sync := make(chan struct{})
-	c.acts <- func() {
+	c.do(func() {
 		c.listeners[id] = wait
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 }
 
 // waitOnListener blocks until a message arrives for id, the ReceiveTimeout
@@ -381,15 +374,12 @@ func (c *Client) registerListener(id ID) {
 func (c *Client) waitOnListener(ctx context.Context, id ID) (msg Message, err error) {
 	log.Println("wait on listener:", id)
 	var (
-		sync = make(chan struct{})
 		wait chan Message
 		ok   bool
 	)
-	c.acts <- func() {
+	c.do(func() {
 		wait, ok = c.listeners[id]
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 	if !ok {
 		return nil, fmt.Errorf("unknown listener ID: %v", id)
 	}
@@ -403,9 +393,9 @@ func (c *Client) waitOnListener(ctx context.Context, id ID) (msg Message, err er
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
-	c.acts <- func() {
+	c.do(func() {
 		delete(c.listeners, id)
-	}
+	})
 	return
 }
 
@@ -426,27 +416,23 @@ func (c *Client) Subscribe(ctx context.Context, topic string, options map[string
 		Options: options,
 		Topic:   URI(topic),
 	}
-	err := c.Send(sub)
+	if err := c.Send(sub); err != nil {
+		return err
+	}
+	msg, err := c.waitOnListener(ctx, id)
 	if err != nil {
 		return err
 	}
-	// wait to receive SUBSCRIBED message
-	var msg Message
-	if msg, err = c.waitOnListener(ctx, id); err != nil {
-		return err
-	} else if e, ok := msg.(*Error); ok {
+	if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error subscribing to topic '%v': %v", topic, e.Error)
-	} else if subscribed, ok := msg.(*Subscribed); !ok {
-		return fmt.Errorf(formatUnexpectedMessage(msg, SUBSCRIBED))
-	} else {
-		// register the event handler with this subscription
-		sync := make(chan struct{})
-		c.acts <- func() {
-			c.events[subscribed.Subscription] = &eventDesc{topic, fn}
-			sync <- struct{}{}
-		}
-		<-sync
 	}
+	subscribed, ok := msg.(*Subscribed)
+	if !ok {
+		return errors.New(formatUnexpectedMessage(msg, SUBSCRIBED))
+	}
+	c.do(func() {
+		c.events[subscribed.Subscription] = &eventDesc{topic, fn}
+	})
 	return nil
 }
 
@@ -454,13 +440,10 @@ func (c *Client) Subscribe(ctx context.Context, topic string, options map[string
 // wait for the UNSUBSCRIBED reply on ctx in addition to the ReceiveTimeout.
 func (c *Client) Unsubscribe(ctx context.Context, topic string) error {
 	var (
-		sync           = make(chan struct{})
 		subscriptionID ID
 		found          bool
-		msg            Message
-		err            error
 	)
-	c.acts <- func() {
+	c.do(func() {
 		for id, desc := range c.events {
 			if desc.topic == topic {
 				subscriptionID = id
@@ -468,9 +451,7 @@ func (c *Client) Unsubscribe(ctx context.Context, topic string) error {
 				break
 			}
 		}
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 	if !found {
 		return fmt.Errorf("event %s is not registered with this client", topic)
 	}
@@ -481,23 +462,22 @@ func (c *Client) Unsubscribe(ctx context.Context, topic string) error {
 		Request:      id,
 		Subscription: subscriptionID,
 	}
-	err = c.Send(sub)
+	if err := c.Send(sub); err != nil {
+		return err
+	}
+	msg, err := c.waitOnListener(ctx, id)
 	if err != nil {
 		return err
 	}
-	// wait to receive UNSUBSCRIBED message
-	if msg, err = c.waitOnListener(ctx, id); err != nil {
-		return err
-	} else if e, ok := msg.(*Error); ok {
+	if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error unsubscribing to topic '%v': %v", topic, e.Error)
-	} else if _, ok := msg.(*Unsubscribed); !ok {
-		return fmt.Errorf(formatUnexpectedMessage(msg, UNSUBSCRIBED))
 	}
-	c.acts <- func() {
+	if _, ok := msg.(*Unsubscribed); !ok {
+		return errors.New(formatUnexpectedMessage(msg, UNSUBSCRIBED))
+	}
+	c.do(func() {
 		delete(c.events, subscriptionID)
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 	return nil
 }
 
@@ -516,28 +496,23 @@ func (c *Client) Register(ctx context.Context, procedure string, fn MethodHandle
 		Options:   options,
 		Procedure: URI(procedure),
 	}
-	err := c.Send(register)
+	if err := c.Send(register); err != nil {
+		return err
+	}
+	msg, err := c.waitOnListener(ctx, id)
 	if err != nil {
 		return err
 	}
-
-	// wait to receive REGISTERED message
-	var msg Message
-	if msg, err = c.waitOnListener(ctx, id); err != nil {
-		return err
-	} else if e, ok := msg.(*Error); ok {
+	if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error registering procedure '%v': %v", procedure, e.Error)
-	} else if registered, ok := msg.(*Registered); !ok {
-		return fmt.Errorf(formatUnexpectedMessage(msg, REGISTERED))
-	} else {
-		// register the event handler with this registration
-		sync := make(chan struct{})
-		c.acts <- func() {
-			c.procedures[registered.Registration] = &procedureDesc{procedure, fn}
-			sync <- struct{}{}
-		}
-		<-sync
 	}
+	registered, ok := msg.(*Registered)
+	if !ok {
+		return errors.New(formatUnexpectedMessage(msg, REGISTERED))
+	}
+	c.do(func() {
+		c.procedures[registered.Registration] = &procedureDesc{procedure, fn}
+	})
 	return nil
 }
 
@@ -557,13 +532,10 @@ func (c *Client) BasicRegister(ctx context.Context, procedure string, fn BasicMe
 // UNREGISTERED reply on ctx in addition to the ReceiveTimeout.
 func (c *Client) Unregister(ctx context.Context, procedure string) error {
 	var (
-		sync        = make(chan struct{})
 		procedureID ID
 		found       bool
-		msg         Message
-		err         error
 	)
-	c.acts <- func() {
+	c.do(func() {
 		for id, p := range c.procedures {
 			if p.name == procedure {
 				procedureID = id
@@ -571,9 +543,7 @@ func (c *Client) Unregister(ctx context.Context, procedure string) error {
 				break
 			}
 		}
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 	if !found {
 		return fmt.Errorf("procedure %s is not registered with this client", procedure)
 	}
@@ -583,24 +553,22 @@ func (c *Client) Unregister(ctx context.Context, procedure string) error {
 		Request:      id,
 		Registration: procedureID,
 	}
-	if err = c.Send(unregister); err != nil {
+	if err := c.Send(unregister); err != nil {
 		return err
 	}
-
-	// wait to receive UNREGISTERED message
-	if msg, err = c.waitOnListener(ctx, id); err != nil {
+	msg, err := c.waitOnListener(ctx, id)
+	if err != nil {
 		return err
-	} else if e, ok := msg.(*Error); ok {
+	}
+	if e, ok := msg.(*Error); ok {
 		return fmt.Errorf("error unregister to procedure '%v': %v", procedure, e.Error)
-	} else if _, ok := msg.(*Unregistered); !ok {
-		return fmt.Errorf(formatUnexpectedMessage(msg, UNREGISTERED))
 	}
-	// register the event handler with this unregistration
-	c.acts <- func() {
+	if _, ok := msg.(*Unregistered); !ok {
+		return errors.New(formatUnexpectedMessage(msg, UNREGISTERED))
+	}
+	c.do(func() {
 		delete(c.procedures, procedureID)
-		sync <- struct{}{}
-	}
-	<-sync
+	})
 	return nil
 }
 
@@ -643,20 +611,19 @@ func (c *Client) Call(ctx context.Context, procedure string, options map[string]
 		Arguments:   args,
 		ArgumentsKw: kwargs,
 	}
-	err := c.Send(call)
+	if err := c.Send(call); err != nil {
+		return nil, err
+	}
+	msg, err := c.waitOnListener(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
-	// wait to receive RESULT message
-	var msg Message
-	if msg, err = c.waitOnListener(ctx, id); err != nil {
-		return nil, err
-	} else if e, ok := msg.(*Error); ok {
+	if e, ok := msg.(*Error); ok {
 		return nil, RPCError{e, procedure}
-	} else if result, ok := msg.(*Result); !ok {
-		return nil, fmt.Errorf(formatUnexpectedMessage(msg, RESULT))
-	} else {
-		return result, nil
 	}
+	result, ok := msg.(*Result)
+	if !ok {
+		return nil, errors.New(formatUnexpectedMessage(msg, RESULT))
+	}
+	return result, nil
 }

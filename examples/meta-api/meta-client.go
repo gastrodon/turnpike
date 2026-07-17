@@ -19,7 +19,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("joined realm")
-	c.ReceiveDone = make(chan bool)
+	c.ReceiveDone = make(chan struct{})
 
 	onJoin := func(args []interface{}, kwargs map[string]interface{}) {
 		log.Println("session joined:", args[0])
