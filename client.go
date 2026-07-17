@@ -1,6 +1,7 @@
 package turnpike
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -364,6 +365,13 @@ func (c *Client) registerListener(id ID) {
 }
 
 func (c *Client) waitOnListener(id ID) (msg Message, err error) {
+	return c.waitOnListenerContext(context.Background(), id)
+}
+
+// waitOnListenerContext blocks until a message arrives for id, the
+// ReceiveTimeout elapses, or ctx is cancelled — whichever comes first. The
+// listener is always removed before returning, on every exit path.
+func (c *Client) waitOnListenerContext(ctx context.Context, id ID) (msg Message, err error) {
 	log.Println("wait on listener:", id)
 	var (
 		sync = make(chan struct{})
@@ -385,6 +393,8 @@ func (c *Client) waitOnListener(id ID) (msg Message, err error) {
 		}
 	case <-time.After(c.ReceiveTimeout):
 		err = fmt.Errorf("timeout while waiting for message")
+	case <-ctx.Done():
+		err = ctx.Err()
 	}
 	c.acts <- func() {
 		delete(c.listeners, id)
@@ -605,8 +615,19 @@ func (rpc RPCError) Error() string {
 	return fmt.Sprintf("error calling procedure '%v': %v: %v: %v", rpc.Procedure, rpc.ErrorMessage.Error, rpc.ErrorMessage.Arguments, rpc.ErrorMessage.ArgumentsKw)
 }
 
-// Call calls a procedure given a URI.
+// Call calls a procedure given a URI, blocking until a result arrives or the
+// ReceiveTimeout elapses. It is equivalent to CallContext with a background
+// context.
 func (c *Client) Call(procedure string, options map[string]interface{}, args []interface{}, kwargs map[string]interface{}) (*Result, error) {
+	return c.CallContext(context.Background(), procedure, options, args, kwargs)
+}
+
+// CallContext calls a procedure given a URI and waits for the result. In
+// addition to the ReceiveTimeout, the wait is bounded by ctx: if ctx is
+// cancelled before a result arrives, CallContext returns ctx.Err() and stops
+// listening for the response. Cancelling ctx does not unsend an already-sent
+// CALL; it only abandons the wait on this side.
+func (c *Client) CallContext(ctx context.Context, procedure string, options map[string]interface{}, args []interface{}, kwargs map[string]interface{}) (*Result, error) {
 	id := NewID()
 	c.registerListener(id)
 
@@ -624,7 +645,7 @@ func (c *Client) Call(procedure string, options map[string]interface{}, args []i
 
 	// wait to receive RESULT message
 	var msg Message
-	if msg, err = c.waitOnListener(id); err != nil {
+	if msg, err = c.waitOnListenerContext(ctx, id); err != nil {
 		return nil, err
 	} else if e, ok := msg.(*Error); ok {
 		return nil, RPCError{e, procedure}
