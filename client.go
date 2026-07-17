@@ -91,6 +91,14 @@ func (c *Client) run() {
 	}
 }
 
+// getMessage waits for a single message from the peer, bounded by ctx and the
+// client's configured ReceiveTimeout, whichever elapses first.
+func (c *Client) getMessage(ctx context.Context) (Message, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.ReceiveTimeout)
+	defer cancel()
+	return GetMessage(ctx, c.Peer)
+}
+
 // JoinRealm joins a WAMP realm, but does not handle challenge/response authentication.
 //
 // Cancelling ctx does not un-send the HELLO; if the router has already accepted,
@@ -108,7 +116,7 @@ func (c *Client) JoinRealm(ctx context.Context, realm string, details map[string
 		close(c.acts)
 		return nil, err
 	}
-	if msg, err := GetMessageTimeout(ctx, c.Peer, c.ReceiveTimeout); err != nil {
+	if msg, err := c.getMessage(ctx); err != nil {
 		c.Peer.Close()
 		close(c.acts)
 		return nil, err
@@ -139,7 +147,7 @@ func (c *Client) joinRealmCRA(ctx context.Context, realm string, details map[str
 		close(c.acts)
 		return nil, err
 	}
-	if msg, err := GetMessageTimeout(ctx, c.Peer, c.ReceiveTimeout); err != nil {
+	if msg, err := c.getMessage(ctx); err != nil {
 		c.Peer.Close()
 		close(c.acts)
 		return nil, err
@@ -163,7 +171,7 @@ func (c *Client) joinRealmCRA(ctx context.Context, realm string, details map[str
 		close(c.acts)
 		return nil, err
 	}
-	if msg, err := GetMessageTimeout(ctx, c.Peer, c.ReceiveTimeout); err != nil {
+	if msg, err := c.getMessage(ctx); err != nil {
 		c.Peer.Close()
 		close(c.acts)
 		return nil, err

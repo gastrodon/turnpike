@@ -234,7 +234,9 @@ func (r *Realm) handleAuth(peer Peer, details map[string]interface{}) (*Welcome,
 		return nil, err
 	}
 
-	msg, err = GetMessageTimeout(context.Background(), peer, r.AuthTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), r.AuthTimeout)
+	msg, err = GetMessage(ctx, peer)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
