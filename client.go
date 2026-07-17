@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 )
 
 var (
@@ -31,8 +30,6 @@ var (
 // A Client routes messages to/from a WAMP router.
 type Client struct {
 	Peer
-	// ReceiveTimeout is the amount of time that the client will block waiting for a response from the router.
-	ReceiveTimeout time.Duration
 	// Auth is a map of WAMP authmethods to functions that will handle each auth type
 	Auth map[string]AuthFunc
 	// ReceiveDone is notified when the client's connection to the router is lost.
@@ -66,12 +63,11 @@ func NewWebsocketClient(serialization Serialization, url string, requestHeader h
 // NewClient takes a connected Peer and returns a new Client
 func NewClient(p Peer) *Client {
 	c := &Client{
-		Peer:           p,
-		ReceiveTimeout: 10 * time.Second,
-		listeners:      make(map[ID]chan Message),
-		events:         make(map[ID]*eventDesc),
-		procedures:     make(map[ID]*procedureDesc),
-		acts:           make(chan func()),
+		Peer:       p,
+		listeners:  make(map[ID]chan Message),
+		events:     make(map[ID]*eventDesc),
+		procedures: make(map[ID]*procedureDesc),
+		acts:       make(chan func()),
 	}
 	go c.run()
 	return c
@@ -109,18 +105,12 @@ func (c *Client) fail(err error) error {
 	return err
 }
 
-// getMessage waits for a single message from the peer, bounded by ctx and the
-// client's configured ReceiveTimeout, whichever elapses first.
-func (c *Client) getMessage(ctx context.Context) (Message, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.ReceiveTimeout)
-	defer cancel()
-	return GetMessage(ctx, c.Peer)
-}
-
 // JoinRealm joins a WAMP realm, but does not handle challenge/response authentication.
 //
-// Cancelling ctx does not un-send the HELLO; if the router has already accepted,
-// this closes the connection without acknowledging it.
+// The wait for the router's reply is bounded by ctx: pass a ctx derived from
+// context.WithTimeout to bound it by duration, or context.Background() to wait
+// indefinitely. Cancelling ctx does not un-send the HELLO; if the router has
+// already accepted, this closes the connection without acknowledging it.
 func (c *Client) JoinRealm(ctx context.Context, realm string, details map[string]interface{}) (map[string]interface{}, error) {
 	if details == nil {
 		details = map[string]interface{}{}
@@ -132,7 +122,7 @@ func (c *Client) JoinRealm(ctx context.Context, realm string, details map[string
 	if err := c.Send(&Hello{Realm: URI(realm), Details: details}); err != nil {
 		return nil, c.fail(err)
 	}
-	msg, err := c.getMessage(ctx)
+	msg, err := GetMessage(ctx, c.Peer)
 	if err != nil {
 		return nil, c.fail(err)
 	}
@@ -160,7 +150,7 @@ func (c *Client) joinRealmCRA(ctx context.Context, realm string, details map[str
 		return nil, c.fail(err)
 	}
 
-	msg, err := c.getMessage(ctx)
+	msg, err := GetMessage(ctx, c.Peer)
 	if err != nil {
 		return nil, c.fail(err)
 	}
@@ -183,7 +173,7 @@ func (c *Client) joinRealmCRA(ctx context.Context, realm string, details map[str
 		return nil, c.fail(err)
 	}
 
-	msg, err = c.getMessage(ctx)
+	msg, err = GetMessage(ctx, c.Peer)
 	if err != nil {
 		return nil, c.fail(err)
 	}
@@ -368,9 +358,9 @@ func (c *Client) registerListener(id ID) {
 	})
 }
 
-// waitOnListener blocks until a message arrives for id, the ReceiveTimeout
-// elapses, or ctx is cancelled — whichever comes first. The listener is always
-// removed before returning, on every exit path.
+// waitOnListener blocks until a message arrives for id or ctx is cancelled —
+// whichever comes first. The listener is always removed before returning, on
+// every exit path.
 func (c *Client) waitOnListener(ctx context.Context, id ID) (msg Message, err error) {
 	log.Println("wait on listener:", id)
 	var (
@@ -383,8 +373,6 @@ func (c *Client) waitOnListener(ctx context.Context, id ID) (msg Message, err er
 	if !ok {
 		return nil, fmt.Errorf("unknown listener ID: %v", id)
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.ReceiveTimeout)
-	defer cancel()
 	select {
 	case msg, ok = <-wait:
 		if !ok {
@@ -403,8 +391,8 @@ func (c *Client) waitOnListener(ctx context.Context, id ID) (msg Message, err er
 type EventHandler func(args []interface{}, kwargs map[string]interface{})
 
 // Subscribe registers the EventHandler to be called for every message in the
-// provided topic, bounding the wait for the SUBSCRIBED reply on ctx in addition
-// to the ReceiveTimeout.
+// provided topic. The wait for the SUBSCRIBED reply is bounded by ctx; pass a
+// ctx derived from context.WithTimeout to bound it by duration.
 func (c *Client) Subscribe(ctx context.Context, topic string, options map[string]interface{}, fn EventHandler) error {
 	if options == nil {
 		options = make(map[string]interface{})
@@ -436,8 +424,9 @@ func (c *Client) Subscribe(ctx context.Context, topic string, options map[string
 	return nil
 }
 
-// Unsubscribe removes the registered EventHandler from the topic, bounding the
-// wait for the UNSUBSCRIBED reply on ctx in addition to the ReceiveTimeout.
+// Unsubscribe removes the registered EventHandler from the topic. The wait for
+// the UNSUBSCRIBED reply is bounded by ctx; pass a ctx derived from
+// context.WithTimeout to bound it by duration.
 func (c *Client) Unsubscribe(ctx context.Context, topic string) error {
 	var (
 		subscriptionID ID
@@ -486,8 +475,9 @@ type MethodHandler func(
 	args []interface{}, kwargs map[string]interface{}, details map[string]interface{},
 ) (result *CallResult)
 
-// Register registers a MethodHandler procedure with the router, bounding the
-// wait for the REGISTERED reply on ctx in addition to the ReceiveTimeout.
+// Register registers a MethodHandler procedure with the router. The wait for
+// the REGISTERED reply is bounded by ctx; pass a ctx derived from
+// context.WithTimeout to bound it by duration.
 func (c *Client) Register(ctx context.Context, procedure string, fn MethodHandler, options map[string]interface{}) error {
 	id := NewID()
 	c.registerListener(id)
@@ -528,8 +518,9 @@ func (c *Client) BasicRegister(ctx context.Context, procedure string, fn BasicMe
 	return c.Register(ctx, procedure, wrap, make(map[string]interface{}))
 }
 
-// Unregister removes a procedure with the router, bounding the wait for the
-// UNREGISTERED reply on ctx in addition to the ReceiveTimeout.
+// Unregister removes a procedure with the router. The wait for the UNREGISTERED
+// reply is bounded by ctx; pass a ctx derived from context.WithTimeout to bound
+// it by duration.
 func (c *Client) Unregister(ctx context.Context, procedure string) error {
 	var (
 		procedureID ID
@@ -595,11 +586,12 @@ func (rpc RPCError) Error() string {
 	return fmt.Sprintf("error calling procedure '%v': %v: %v: %v", rpc.Procedure, rpc.ErrorMessage.Error, rpc.ErrorMessage.Arguments, rpc.ErrorMessage.ArgumentsKw)
 }
 
-// Call calls a procedure given a URI and waits for the result. In addition to
-// the ReceiveTimeout, the wait is bounded by ctx: if ctx is cancelled before a
-// result arrives, Call returns ctx.Err() and stops listening for the response.
-// Cancelling ctx does not unsend an already-sent CALL; it only abandons the
-// wait on this side.
+// Call calls a procedure given a URI and waits for the result. The wait is
+// bounded by ctx: pass a ctx derived from context.WithTimeout to bound it by
+// duration, or context.Background() to wait indefinitely. If ctx is cancelled
+// before a result arrives, Call returns ctx.Err() and stops listening for the
+// response. Cancelling ctx does not unsend an already-sent CALL; it only
+// abandons the wait on this side.
 func (c *Client) Call(ctx context.Context, procedure string, options map[string]interface{}, args []interface{}, kwargs map[string]interface{}) (*Result, error) {
 	id := NewID()
 	c.registerListener(id)

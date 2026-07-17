@@ -301,7 +301,7 @@ func (r Realm) checkResponse(welcomeID ID, chal *Challenge, auth *Authenticate) 
 	if details, err := authenticator.Authenticate(welcomeID, chal.Extra, auth.Signature); err != nil {
 		return nil, err
 	} else {
-		return &Welcome{Details: addAuthMethod(details, chal.AuthMethod)}, nil
+		return &Welcome{Id: welcomeID, Details: addAuthMethod(details, chal.AuthMethod)}, nil
 	}
 }
 

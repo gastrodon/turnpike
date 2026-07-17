@@ -41,7 +41,10 @@ func main() {
 		log.Fatal(err)
 	}
 	c.Auth = map[string]turnpike.AuthFunc{"example-auth": exampleAuthFunc}
-	_, err = c.JoinRealm(context.Background(), "turnpike.examples", nil)
+	// The handshake is bounded by ctx; callers now govern their own timeouts.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = c.JoinRealm(ctx, "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
 	}

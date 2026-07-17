@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gastrodon/turnpike"
 )
@@ -41,13 +42,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = c.JoinRealm(context.Background(), "turnpike.examples", nil)
+	// Each request is bounded by ctx; callers now govern their own timeouts.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = c.JoinRealm(ctx, "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	messages := make(chan message)
-	if err := c.Subscribe(context.Background(), "chat", nil, func(args []interface{}, kwargs map[string]interface{}) {
+	if err := c.Subscribe(ctx, "chat", nil, func(args []interface{}, kwargs map[string]interface{}) {
 		if len(args) == 2 {
 			if from, ok := args[0].(string); !ok {
 				log.Println("First argument not a string:", args[0])

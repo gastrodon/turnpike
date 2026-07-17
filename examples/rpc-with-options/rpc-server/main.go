@@ -19,7 +19,10 @@ func main() {
 		Addr:    ":8000",
 	}
 	client, _ = s.GetLocalClient("turnpike.examples", nil)
-	if err := client.Register(context.Background(), "alarm.set", alarmSet, make(map[string]interface{})); err != nil {
+	// The registration is bounded by ctx; callers now govern their own timeouts.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := client.Register(ctx, "alarm.set", alarmSet, make(map[string]interface{})); err != nil {
 		panic(err)
 	}
 	log.Println("turnpike server starting on port 8000")
