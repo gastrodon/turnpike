@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync/atomic"
 )
 
 var (
@@ -38,6 +39,7 @@ type Client struct {
 	events      map[ID]*eventDesc
 	procedures  map[ID]*procedureDesc
 	acts        chan func()
+	didFail     atomic.Bool
 }
 
 type procedureDesc struct {
@@ -98,8 +100,11 @@ func (c *Client) do(fn func()) {
 }
 
 // fail closes the peer and the actor loop, returning err. Used on the handshake
-// error paths before the client is fully established.
+// error paths before the client is fully established. Safe to call multiple times.
 func (c *Client) fail(err error) error {
+	if c.didFail.Swap(true) {
+		return err
+	}
 	c.Peer.Close()
 	close(c.acts)
 	return err
