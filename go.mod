@@ -8,7 +8,7 @@ require (
 	github.com/rthornton128/goncurses v0.0.0-20160426042736-ef16d4e36502
 	github.com/satori/go.uuid v1.1.1-0.20160927100844-b061729afc07
 	github.com/smartystreets/goconvey v1.6.3-0.20160928205523-7befa7fd6e2e
-	github.com/ugorji/go v0.0.0-20160928015244-faddd6128c66
+	github.com/ugorji/go/codec v1.2.12
 )
 
 require (

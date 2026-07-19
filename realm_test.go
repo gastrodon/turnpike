@@ -128,10 +128,15 @@ func TestCRAuthenticator(t *testing.T) {
 			})
 			Convey("When a client provides a valid signature for the challenge", func() {
 				auth := &Authenticate{Signature: testCRSign(challenge.Extra)}
-				msg, err := realm.checkResponse(NewID(), challenge, auth)
+				id := NewID()
+				msg, err := realm.checkResponse(id, challenge, auth)
 				Convey("CheckResponse should return a Welcome message", func() {
 					So(err, ShouldEqual, nil)
 					So(msg.MessageType(), ShouldEqual, WELCOME)
+				})
+				Convey("The Welcome should carry the assigned session ID", func() {
+					So(err, ShouldEqual, nil)
+					So(msg.Id, ShouldEqual, id)
 				})
 			})
 		})

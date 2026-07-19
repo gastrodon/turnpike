@@ -1,6 +1,7 @@
 package turnpike
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -92,14 +93,16 @@ func (r *defaultRouter) RegisterRealm(uri URI, realm Realm) error {
 	return nil
 }
 
-func (r *defaultRouter) Accept(client Peer) error {
+func (r *defaultRouter) Accept(peer Peer) error {
 	if r.closing {
-		logErr(client.Send(&Abort{Reason: ErrSystemShutdown}))
-		logErr(client.Close())
+		logErr(peer.Send(&Abort{Reason: ErrSystemShutdown}))
+		logErr(peer.Close())
 		return fmt.Errorf("Router is closing, no new connections are allowed")
 	}
 
-	msg, err := GetMessageTimeout(client, 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	msg, err := GetMessage(ctx, peer)
+	cancel()
 	if err != nil {
 		return err
 	}
@@ -107,26 +110,26 @@ func (r *defaultRouter) Accept(client Peer) error {
 
 	hello, ok := msg.(*Hello)
 	if !ok {
-		logErr(client.Send(&Abort{Reason: URI("wamp.error.protocol_violation")}))
-		logErr(client.Close())
+		logErr(peer.Send(&Abort{Reason: URI("wamp.error.protocol_violation")}))
+		logErr(peer.Close())
 		return fmt.Errorf("protocol violation: expected HELLO, received %s", msg.MessageType())
 	}
 
 	realm, ok := r.realms[hello.Realm]
 	if !ok {
-		logErr(client.Send(&Abort{Reason: ErrNoSuchRealm}))
-		logErr(client.Close())
+		logErr(peer.Send(&Abort{Reason: ErrNoSuchRealm}))
+		logErr(peer.Close())
 		return NoSuchRealmError(hello.Realm)
 	}
 
-	welcome, err := realm.handleAuth(NewID(), client, hello.Details)
+	welcome, err := realm.handleAuth(NewID(), peer, hello.Details)
 	if err != nil {
 		abort := &Abort{
 			Reason:  ErrAuthorizationFailed, // TODO: should this be AuthenticationFailed?
 			Details: map[string]interface{}{"error": err.Error()},
 		}
-		logErr(client.Send(abort))
-		logErr(client.Close())
+		logErr(peer.Send(abort))
+		logErr(peer.Close())
 		return AuthenticationError(err.Error())
 	}
 
@@ -139,7 +142,7 @@ func (r *defaultRouter) Accept(client Peer) error {
 			welcome.Details[k] = v
 		}
 	}
-	if err := client.Send(welcome); err != nil {
+	if err := peer.Send(welcome); err != nil {
 		return err
 	}
 	log.Println("Established session:", welcome.Id)
@@ -148,7 +151,7 @@ func (r *defaultRouter) Accept(client Peer) error {
 	welcome.Details["session"] = welcome.Id
 	welcome.Details["realm"] = hello.Realm
 	sess := &Session{
-		Peer:    client,
+		Peer:    peer,
 		Id:      welcome.Id,
 		Details: welcome.Details,
 		kill:    make(chan URI, 1),

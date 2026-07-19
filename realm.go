@@ -1,6 +1,7 @@
 package turnpike
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -218,7 +219,7 @@ func (r *Realm) handleSession(sess *Session) {
 	}
 }
 
-func (r *Realm) handleAuth(welcomeID ID, client Peer, details map[string]interface{}) (*Welcome, error) {
+func (r *Realm) handleAuth(welcomeID ID, peer Peer, details map[string]interface{}) (*Welcome, error) {
 	msg, err := r.authenticate(details)
 	if err != nil {
 		return nil, err
@@ -231,11 +232,13 @@ func (r *Realm) handleAuth(welcomeID ID, client Peer, details map[string]interfa
 	}
 	// Challenge response
 	challenge := msg.(*Challenge)
-	if err := client.Send(challenge); err != nil {
+	if err := peer.Send(challenge); err != nil {
 		return nil, err
 	}
 
-	msg, err = GetMessageTimeout(client, r.AuthTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), r.AuthTimeout)
+	msg, err = GetMessage(ctx, peer)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +301,7 @@ func (r Realm) checkResponse(welcomeID ID, chal *Challenge, auth *Authenticate) 
 	if details, err := authenticator.Authenticate(welcomeID, chal.Extra, auth.Signature); err != nil {
 		return nil, err
 	} else {
-		return &Welcome{Details: addAuthMethod(details, chal.AuthMethod)}, nil
+		return &Welcome{Id: welcomeID, Details: addAuthMethod(details, chal.AuthMethod)}, nil
 	}
 }
 

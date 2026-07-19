@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/gastrodon/turnpike"
@@ -12,24 +13,25 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("connected to router")
-	_, err = c.JoinRealm("turnpike.examples", nil)
+	ctx := context.Background()
+	_, err = c.JoinRealm(ctx, "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println("joined realm")
-	c.ReceiveDone = make(chan bool)
+	c.ReceiveDone = make(chan struct{})
 
 	onJoin := func(args []interface{}, kwargs map[string]interface{}) {
 		log.Println("session joined:", args[0])
 	}
-	if err := c.Subscribe("wamp.session.on_join", nil, onJoin); err != nil {
+	if err := c.Subscribe(ctx, "wamp.session.on_join", nil, onJoin); err != nil {
 		log.Fatalln("Error subscribing to channel:", err)
 	}
 
 	onLeave := func(args []interface{}, kwargs map[string]interface{}) {
 		log.Println("session left:", args[0])
 	}
-	if err := c.Subscribe("wamp.session.on_leave", nil, onLeave); err != nil {
+	if err := c.Subscribe(ctx, "wamp.session.on_leave", nil, onLeave); err != nil {
 		log.Fatalln("Error subscribing to channel:", err)
 	}
 
