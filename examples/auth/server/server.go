@@ -9,7 +9,7 @@ import (
 	"net/http"
 
 	"github.com/gastrodon/turnpike"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 // this is just an example, please don't actually use it
