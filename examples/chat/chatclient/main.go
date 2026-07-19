@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"time"
 
 	"github.com/gastrodon/turnpike"
 )
@@ -42,9 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Each request is bounded by ctx; callers now govern their own timeouts.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	ctx := context.Background()
 	_, err = c.JoinRealm(ctx, "turnpike.examples", nil)
 	if err != nil {
 		log.Fatal(err)
